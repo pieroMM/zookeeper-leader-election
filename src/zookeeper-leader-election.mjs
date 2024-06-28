@@ -168,12 +168,12 @@ export class ZookeeperLeaderElection extends EventEmitter {
      * @private
      * @fires ClientEvents.NODE_CHILDREN_CHANGED if the zNode notifies a children list change
      */
-    listChildren = () => {
+    #listChildren = () => {
         this.client.getChildren(
             this.zNodeName,
             _ => {
                 if (!(this.disconnecting || this.disconnected)) {
-                    this.listChildren();
+                    this.#listChildren();
                     /**
                      * @event ClientEvents.NODE_CHILDREN_CHANGED
                      * @typedef {{path: string, isLeader:boolean, id: number}}
@@ -278,7 +278,7 @@ export class ZookeeperLeaderElection extends EventEmitter {
             }
             if (path) {
                 this.id = extractId(path);
-                this.listChildren();
+                this.#listChildren();
                 /**
                  * @event ClientEvents.CHILD_CREATED
                  * @typedef {{path: string, isLeader: boolean, id: number}}
