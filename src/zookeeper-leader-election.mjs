@@ -1,0 +1,274 @@
+import zookeeper, {CreateMode} from 'node-zookeeper-client';
+import {EventEmitter} from 'node:events';
+import * as assert from "node:assert/strict";
+
+/**
+ * A namespace.
+ * @namespace ZookeeperLeaderElection
+ */
+
+/** @typedef {{ host: string, zNodeName: string, childrenPrefix: string, sessionTimeout?: number, spinDelay?: number, retries?: number }} ClientOptions
+ * @memberOf ZookeeperLeaderElection
+ * */
+
+
+/** @enum {string}
+ * @memberOf ZookeeperLeaderElection
+ * */
+export const ClientEvents = {
+    CHILD_CREATED: 'childCreated',
+    CLIENT_CONNECTED: 'clientConnected',
+    CLIENT_DISCONNECTED: 'clientDisconnected',
+    ERROR: 'error',
+    LEADER_CHANGED: 'leaderChanged',
+    NODE_CHILDREN_CHANGED: 'nodeChildrenChanged',
+    NODE_CREATED: 'nodeCreated',
+    NODE_REMOVED: 'nodeRemoved'
+}
+
+/**
+ * Extract the numeric identifier from a given child node path
+ *
+ * @param {string} childNodePath
+ * @returns {number}
+ * @memberOf ZookeeperLeaderElection
+ */
+export const extractId = (childNodePath) => {
+    const childPathRegExp = new RegExp(/(?<=(^(\w|\-)+))\d+$/);
+    const fullPathRegExp = new RegExp(/(?<=(^\/(\w|\-)+\/(\w|\-)+))\d+$/);
+    const matches = childNodePath.match(childPathRegExp) ??
+        childNodePath.match(fullPathRegExp);
+    return +matches?.at(0);
+}
+
+/**
+ * Check whether a zNode name provided is valid
+ *
+ * @param zNodeName
+ * @returns {boolean}
+ * @memberOf ZookeeperLeaderElection
+ */
+export const isValidZNodeName = zNodeName => !!zNodeName.match(/^\/(\w|\-)+$/)?.at(0);
+
+/**
+ * Check whether a children prefix provided is valid
+ *
+ * @param childrenPrefix
+ * @returns {boolean}
+ * @memberOf ZookeeperLeaderElection
+ */
+export const isValidChildrenPrefix = childrenPrefix => !!childrenPrefix.match(/^(\w|\-)+$/)?.at(0);
+
+/**
+ * A Zookeeper client handling leader election
+ *
+ * @constructor
+ * @param {ClientOptions} opts
+ * @memberOf ZookeeperLeaderElection
+ */
+export class ZookeeperLeaderElection extends EventEmitter {
+
+    constructor(opts) {
+        super();
+        assert.ok(isValidZNodeName(opts.zNodeName), Error('property zNodeName must start with \'/\' and allows a-z, A-Z, 0-9, -, _'))
+        assert.ok(isValidChildrenPrefix(opts.childrenPrefix), Error('property childrenPrefix allows a-z, A-Z, 0-9, -, _'))
+        this.host = opts.host;
+        this.zNodeName = opts.zNodeName;
+        this.path = `${opts.zNodeName}/${opts.childrenPrefix}`;
+        this.sessionTimeout = opts.sessionTimeout ?? 30000;
+        this.spinDelay = opts.spinDelay ?? 1000;
+        this.retries = opts.retries ?? 0;
+        this.id = null;
+        this.zNodeStat = null;
+        this.isLeader = false;
+        this.disconnecting = false;
+        this.disconnected = true;
+    }
+
+    /**
+     * Initializes and connects the Zookeeper client
+     *
+     * @public
+     */
+    init = () => {
+        const {sessionTimeout, spinDelay, retries} = this;
+        this.client = zookeeper
+            .createClient(this.host, {sessionTimeout, spinDelay, retries})
+            .once('connected', (error, _) => {
+                if (error) {
+                    this.emit(ClientEvents.ERROR, error);
+                    return;
+                }
+                this.emit(ClientEvents.CLIENT_CONNECTED, {host: this.host})
+                this.zNodeExists();
+            })
+            .once('disconnected', (error, _) => {
+                if (error) {
+                    this.emit(ClientEvents.ERROR, error);
+                    return;
+                }
+                this.disconnected = true;
+                this.emit(ClientEvents.CLIENT_DISCONNECTED, {host: this.host, path: this.zNodeName, id: this.id})
+            });
+        this.client.connect();
+    }
+
+    /**
+     * Close the Zookeeper client
+     *
+     * @public
+     * @fires ClientEvents.CLOSING_CLIENT
+     */
+    close = () => {
+        this.disconnecting = true;
+        this.client?.close();
+    }
+
+    /**
+     * Defines if the current client is the leader instance
+     *
+     * @private
+     * @param {string[]} children the children ids list
+     * @fires ClientEvents.LEADER_CHANGED
+     */
+    electLeader = children => {
+        const prev = this.isLeader;
+        this.isLeader = this.id !== null &&
+            children.map(extractId).find(item => item < this.id) === undefined;
+        if (prev !== this.isLeader) {
+            this.emit(ClientEvents.LEADER_CHANGED, {path: this.zNodeName, isLeader: this.isLeader, id: this.id});
+        }
+    }
+
+    /**
+     * Ask for the zNode children list
+     *
+     * @private
+     * @fires ClientEvents.NODE_CHILDREN_CHANGED if the zNode notifies a children list change
+     */
+    listChildren = () => {
+        this.client.getChildren(
+            this.zNodeName,
+            _ => {
+                if (!(this.disconnecting || this.disconnected)) {
+                    this.listChildren();
+                    this.emit(ClientEvents.NODE_CHILDREN_CHANGED, {
+                        path: this.zNodeName,
+                        isLeader: this.isLeader,
+                        id: this.id
+                    });
+                }
+            },
+            (error, children) => {
+                if (error) {
+                    this.emit(ClientEvents.ERROR, error);
+                    return;
+                }
+                this.electLeader(children);
+            }
+        );
+    }
+
+    /**
+     * Creates the zNode
+     *
+     * @private
+     */
+    createZNode = () => this.client.create(
+        this.zNodeName,
+        CreateMode.PERSISTENT,
+        error => {
+            if (error) {
+                this.emit(ClientEvents.ERROR, error);
+            }
+        }
+    )
+
+    /**
+     * Verifies the zNode existence.
+     * Whether the zNode exist creates a new child, otherwise creates the zNode and creates a new child
+     *
+     * @private
+     * @fires ClientEvents.NODE_CREATED
+     */
+    zNodeExists = () => {
+        this.client.exists(
+            this.zNodeName,
+            _ => {
+                this.zNodeExists();
+                this.emit(ClientEvents.NODE_CREATED, {path: this.zNodeName});
+            },
+            (error, stat) => {
+                if (error) {
+                    this.emit(ClientEvents.ERROR, error);
+                    return;
+                }
+                if (!!stat) {
+                    this.zNodeStat = stat;
+                    this.createChild();
+                } else {
+                    this.createZNode();
+                }
+            }
+        )
+    }
+
+    /**
+     * Creates a child node
+     *
+     * @private
+     * @fires ClientEvents.CHILD_CREATED
+     */
+    createChild = () => this.client.create(
+        this.path,
+        CreateMode.EPHEMERAL_SEQUENTIAL,
+        (error, path) => {
+            if (error) {
+                this.emit(ClientEvents.ERROR, error);
+                return;
+            }
+            if (path) {
+                this.id = extractId(path);
+                this.listChildren();
+                this.emit(ClientEvents.CHILD_CREATED, {path: this.zNodeName, isLeader: this.isLeader, id: this.id})
+            }
+        }
+    )
+
+    /**
+     * Removes the zNode
+     *
+     * @public
+     * @fires ClientEvents.NODE_REMOVED
+     */
+    deleteZNode = () => {
+        const invokeClientRemove = that => that.client.remove(
+            this.zNodeName,
+            error => {
+                if (error) {
+                    that.emit(ClientEvents.ERROR, error);
+                    return;
+                }
+                that.emit(ClientEvents.NODE_REMOVED, {path: that.zNodeName, isLeader: that.isLeader, id: this.id});
+            });
+        const connectionCallback = (error, _) => {
+            if (error) {
+                this.emit(ClientEvents.ERROR, error);
+                return;
+            }
+            this.disconnecting = false;
+            this.disconnected = false;
+            invokeClientRemove(this);
+        };
+        if (!this.client || this.disconnected) {
+            this.client = zookeeper
+                .createClient(this.host)
+                .once('connected', connectionCallback.bind(this))
+            this.client.connect();
+        } else {
+            invokeClientRemove(this)
+        }
+    }
+
+}
+
