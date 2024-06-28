@@ -12,7 +12,7 @@ npm i zookeeper-leader-election
 
 ```javascript
 
-import {ClientEvents, ZookeeperClient} from 'zookeeper-leader-election';
+import {ClientEvents, ZookeeperLeaderElection} from 'zookeeper-leader-election';
 
 const opts = {
     host: 'localhost:2181',
@@ -20,7 +20,7 @@ const opts = {
     childrenPrefix: 'guid-n_',
 };
 
-const client = new ZookeeperClient(opts)
+const client = new ZookeeperLeaderElection(opts)
     .on(ClientEvents.CHILD_CREATED, ({path, isLeader, id}) => { console.log(`[Child Created], path: ${path}, isLeader: ${isLeader}, id: ${id}`)})
     .on(ClientEvents.CLIENT_CONNECTED, ({host}) => { console.log(`[Client Connected], host: ${host}`)})
     .on(ClientEvents.CLIENT_DISCONNECTED, ({host, path, id}) => { console.log(`[Client Disconnected], host: ${host}, path: ${path}, id: ${id}`)})
