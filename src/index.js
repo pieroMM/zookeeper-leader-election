@@ -1,1 +1,6 @@
-export {ClientEvents, ZookeeperLeaderElection} from './zookeeper-leader-election.mjs';
+const { ClientEvents, ZookeeperLeaderElection} = require("./zookeeper-leader-election.cjs");
+
+module.exports = {
+    ClientEvents,
+    ZookeeperLeaderElection
+}

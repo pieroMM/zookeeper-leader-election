@@ -1,15 +1,15 @@
-import {describe, it, beforeEach, afterEach, after, mock} from 'node:test';
-import {TIMEOUT_EXPIRED, waitForPredicate} from "wait-for-predicate";
-import * as assert from "assert";
-import {GenericContainer} from "testcontainers";
-import {ClientEvents, ZookeeperLeaderElection} from "../zookeeper-leader-election.mjs";
-import zookeeper from "node-zookeeper-client";
+const {describe, it, beforeEach, afterEach, after, mock} = require("node:test");
+const {TIMEOUT_EXPIRED, waitForPredicate} = require("wait-for-predicate");
+const assert = require("assert");
+const {GenericContainer} = require("testcontainers");
+const {ClientEvents, ZookeeperLeaderElection} = require("../zookeeper-leader-election.cjs");
+const zookeeper = require("node-zookeeper-client");
 
-describe('Zookeeper Client', async () => {
+describe("Zookeeper Client", async () => {
     let container, host;
 
     beforeEach(async () => {
-        container = await new GenericContainer('zookeeper')
+        container = await new GenericContainer("zookeeper")
             .withExposedPorts(2181)
             .start();
 
@@ -22,12 +22,12 @@ describe('Zookeeper Client', async () => {
 
     after(() => { process.exit(0) });
 
-    await it('Create single client node and elect the leader', async () => {
+    await it("Create single client node and elect the leader", async () => {
 
         const opts = {
             host,
-            zNodeName: '/connect-election',
-            childrenPrefix: 'guid-n_',
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
             sessionTimeout: 10000,
             spinDelay: 1000,
             retries: 0
@@ -71,7 +71,7 @@ describe('Zookeeper Client', async () => {
 
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
-                assert.fail('Timeout expired');
+                assert.fail("Timeout expired");
             } else {
                 throw error;
             }
@@ -80,13 +80,13 @@ describe('Zookeeper Client', async () => {
         }
     });
 
-    await it('Create clients becoming leaders in sequence', async () => {
+    await it("Create clients becoming leaders in sequence", async () => {
         const leadersSequence = [];
 
         const opts = {
             host,
-            zNodeName: '/connect-election',
-            childrenPrefix: 'guid-n_',
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
             sessionTimeout: 10000,
             spinDelay: 1000,
             retries: 0
@@ -125,21 +125,21 @@ describe('Zookeeper Client', async () => {
             assert.strictEqual(leadersSequence[1], willBeLeaderLater.id);
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
-                assert.fail('Timeout expired');
+                assert.fail("Timeout expired");
             } else {
                 throw error;
             }
         }
     });
 
-    await it('Omit the zNode existence, check and capture the error', async () => {
+    await it("Omit the zNode existence, check and capture the error", async () => {
 
         let error = null;
 
         const opts = {
             host,
-            zNodeName: '/connect-election',
-            childrenPrefix: 'guid-n_',
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
             sessionTimeout: 10000,
             spinDelay: 1000,
             retries: 0
@@ -161,7 +161,7 @@ describe('Zookeeper Client', async () => {
         const noCheckInit = that => {
             const {sessionTimeout, spinDelay, retries} = that;
             that.client = zookeeper.createClient(that.host, {sessionTimeout, spinDelay, retries});
-            that.client.once('connected', error => {
+            that.client.once("connected", error => {
                 if (error) {
                     that.emit(ClientEvents.ERROR, error);
                     return;
@@ -172,7 +172,7 @@ describe('Zookeeper Client', async () => {
         }
         mock.method(
             secondClient,
-            'init',
+            "init",
             noCheckInit.bind(null, secondClient),
             { times: 1 }
         );
@@ -181,10 +181,10 @@ describe('Zookeeper Client', async () => {
 
         try {
             await waitForPredicate(() => error !== null, {timeout: 30000});
-            assert.strictEqual(error.name, 'NODE_EXISTS');
+            assert.strictEqual(error.name, "NODE_EXISTS");
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
-                assert.fail('Timeout expired');
+                assert.fail("Timeout expired");
             } else {
                 throw error;
             }
@@ -194,14 +194,14 @@ describe('Zookeeper Client', async () => {
         }
     });
 
-    await it('zNode remove', async () => {
+    await it("zNode remove", async () => {
 
         let deleted = false;
 
         const opts = {
             host,
-            zNodeName: '/connect-election',
-            childrenPrefix: 'guid-n_',
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
             sessionTimeout: 10000,
             spinDelay: 1000,
             retries: 0
@@ -225,7 +225,7 @@ describe('Zookeeper Client', async () => {
             assert.ok(deleted);
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
-                assert.fail('Timeout expired');
+                assert.fail("Timeout expired");
             } else {
                 throw error;
             }
@@ -234,14 +234,14 @@ describe('Zookeeper Client', async () => {
         }
     });
 
-    await it('try to remove a non-empty zNode', async () => {
+    await it("try to remove a non-empty zNode", async () => {
 
         let errorName = null;
 
         const opts = {
             host,
-            zNodeName: '/connect-election',
-            childrenPrefix: 'guid-n_',
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
             sessionTimeout: 10000,
             spinDelay: 1000,
             retries: 0
@@ -259,10 +259,10 @@ describe('Zookeeper Client', async () => {
 
         try {
             await waitForPredicate(() => !!errorName, {timeout: 30000});
-            assert.strictEqual(errorName, 'NOT_EMPTY');
+            assert.strictEqual(errorName, "NOT_EMPTY");
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
-                assert.fail('Timeout expired');
+                assert.fail("Timeout expired");
             } else {
                 throw error;
             }

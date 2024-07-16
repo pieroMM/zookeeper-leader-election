@@ -12,12 +12,12 @@ npm i zookeeper-leader-election
 
 ```javascript
 
-import {ClientEvents, ZookeeperLeaderElection} from 'zookeeper-leader-election';
+const {ClientEvents, ZookeeperLeaderElection}  = require("zookeeper-leader-election");
 
 const opts = {
-    host: 'localhost:2181',
-    zNodeName: '/connect-election',
-    childrenPrefix: 'guid-n_',
+    host: "localhost:2181",
+    zNodeName: "/connect-election",
+    childrenPrefix: "guid-n_",
 };
 
 const client = new ZookeeperLeaderElection(opts)

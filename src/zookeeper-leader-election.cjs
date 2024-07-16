@@ -1,9 +1,9 @@
-import zookeeper, {CreateMode} from 'node-zookeeper-client';
-import {EventEmitter} from 'node:events';
-import * as assert from "node:assert/strict";
+const zookeeper = require("node-zookeeper-client");
+const {CreateMode} = zookeeper;
+const EE = require("node:events").EventEmitter;
+const assert = require("node:assert/strict");
 
 /**
- * A namespace.
  * @namespace ZookeeperLeaderElection
  */
 
@@ -15,15 +15,15 @@ import * as assert from "node:assert/strict";
  * readonly
  * @memberOf ZookeeperLeaderElection
  * */
-export const ClientEvents = {
-    CHILD_CREATED: 'childCreated',
-    CLIENT_CONNECTED: 'clientConnected',
-    CLIENT_DISCONNECTED: 'clientDisconnected',
-    ERROR: 'error',
-    LEADER_CHANGED: 'leaderChanged',
-    NODE_CHILDREN_CHANGED: 'nodeChildrenChanged',
-    NODE_CREATED: 'nodeCreated',
-    NODE_REMOVED: 'nodeRemoved'
+const ClientEvents = {
+    CHILD_CREATED: "childCreated",
+    CLIENT_CONNECTED: "clientConnected",
+    CLIENT_DISCONNECTED: "clientDisconnected",
+    ERROR: "error",
+    LEADER_CHANGED: "leaderChanged",
+    NODE_CHILDREN_CHANGED: "nodeChildrenChanged",
+    NODE_CREATED: "nodeCreated",
+    NODE_REMOVED: "nodeRemoved"
 }
 
 /**
@@ -33,7 +33,7 @@ export const ClientEvents = {
  * @returns {number}
  * @memberOf ZookeeperLeaderElection
  */
-export const extractId = (childNodePath) => {
+const extractId = (childNodePath) => {
     const childPathRegExp = new RegExp(/(?<=(^(\w|-)+))\d+$/);
     const fullPathRegExp = new RegExp(/(?<=(^\/(\w|-)+\/(\w|-)+))\d+$/);
     const matches = childNodePath.match(childPathRegExp) ??
@@ -48,7 +48,7 @@ export const extractId = (childNodePath) => {
  * @returns {boolean}
  * @memberOf ZookeeperLeaderElection
  */
-export const isValidZNodeName = zNodeName => !!zNodeName.match(/^\/(\w|-)+$/)?.at(0);
+const isValidZNodeName = zNodeName => !!zNodeName.match(/^\/(\w|-)+$/)?.at(0);
 
 /**
  * Check whether a children prefix provided is valid
@@ -57,7 +57,7 @@ export const isValidZNodeName = zNodeName => !!zNodeName.match(/^\/(\w|-)+$/)?.a
  * @returns {boolean}
  * @memberOf ZookeeperLeaderElection
  */
-export const isValidChildrenPrefix = childrenPrefix => !!childrenPrefix.match(/^(\w|-)+$/)?.at(0);
+const isValidChildrenPrefix = childrenPrefix => !!childrenPrefix.match(/^(\w|-)+$/)?.at(0);
 
 /**
  * A Zookeeper client handling leader election
@@ -66,12 +66,12 @@ export const isValidChildrenPrefix = childrenPrefix => !!childrenPrefix.match(/^
  * @param {ClientOptions} opts
  * @memberOf ZookeeperLeaderElection
  */
-export class ZookeeperLeaderElection extends EventEmitter {
+class ZookeeperLeaderElection extends EE {
 
     constructor(opts) {
         super();
-        assert.ok(isValidZNodeName(opts.zNodeName), Error('property zNodeName must start with \'/\' and allows a-z, A-Z, 0-9, -, _'))
-        assert.ok(isValidChildrenPrefix(opts.childrenPrefix), Error('property childrenPrefix allows a-z, A-Z, 0-9, -, _'))
+        assert.ok(isValidZNodeName(opts.zNodeName), Error("property zNodeName must start with \'/\' and allows a-z, A-Z, 0-9, -, _"))
+        assert.ok(isValidChildrenPrefix(opts.childrenPrefix), Error("property childrenPrefix allows a-z, A-Z, 0-9, -, _"))
         this.host = opts.host;
         this.zNodeName = opts.zNodeName;
         this.path = `${opts.zNodeName}/${opts.childrenPrefix}`;
@@ -97,7 +97,7 @@ export class ZookeeperLeaderElection extends EventEmitter {
         const {sessionTimeout, spinDelay, retries} = this;
         this.client = zookeeper
             .createClient(this.host, {sessionTimeout, spinDelay, retries})
-            .once('connected', (error, _) => {
+            .once("connected", (error, _) => {
                 if (error) {
                     /**
                      * @event ClientEvents.ERROR
@@ -113,7 +113,7 @@ export class ZookeeperLeaderElection extends EventEmitter {
                 this.emit(ClientEvents.CLIENT_CONNECTED, {host: this.host})
                 this.#zNodeExists();
             })
-            .once('disconnected', (error, _) => {
+            .once("disconnected", (error, _) => {
                 if (error) {
                     /**
                      * @event ClientEvents.ERROR
@@ -329,12 +329,19 @@ export class ZookeeperLeaderElection extends EventEmitter {
         if (!this.client || this.disconnected) {
             this.client = zookeeper
                 .createClient(this.host)
-                .once('connected', connectionCallback.bind(this))
+                .once("connected", connectionCallback.bind(this))
             this.client.connect();
         } else {
             invokeClientRemove(this)
         }
     }
-
 }
+
+module.exports = {
+    ClientEvents,
+    extractId,
+    isValidZNodeName,
+    isValidChildrenPrefix,
+    ZookeeperLeaderElection
+};
 
