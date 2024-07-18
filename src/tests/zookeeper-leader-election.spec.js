@@ -1,4 +1,4 @@
-const {describe, it, beforeEach, afterEach, after, mock} = require("node:test");
+const {describe, it, beforeEach, afterEach, mock} = require("node:test");
 const {TIMEOUT_EXPIRED, waitForPredicate} = require("wait-for-predicate");
 const assert = require("assert");
 const {GenericContainer} = require("testcontainers");
@@ -56,9 +56,7 @@ describe("Zookeeper Client", async () => {
 
         try {
 
-            await waitForPredicate(
-                () => !!childCreatedCallback.mock.calls?.length && !!leaderChangedCallback.mock.calls?.length,
-                {timeout: 10000});
+            await waitForPredicate(() => !!childCreatedCallback.mock.calls?.length && !!leaderChangedCallback.mock.calls?.length, {timeout: 10000});
 
             assert.strictEqual(clientConnectedCallback.mock.calls?.length, 1);
             assert.strictEqual(childCreatedCallback.mock.calls?.length, 1);
@@ -114,7 +112,7 @@ describe("Zookeeper Client", async () => {
         client.init();
 
         try {
-            await waitForPredicate(() => !!finish,  {timeout: 10000});
+            await waitForPredicate(() => !!finish, {timeout: 10000});
             assert.strictEqual(connected, true);
             assert.strictEqual(disconnected, true);
             assert.strictEqual(disconnecting, false);
@@ -130,6 +128,7 @@ describe("Zookeeper Client", async () => {
 
     await it("Create clients becoming leaders in sequence", async () => {
         const leadersSequence = [];
+        let bothClosed = false;
 
         const opts = {
             host,
@@ -161,16 +160,20 @@ describe("Zookeeper Client", async () => {
         })
             .on(ClientEvents.ERROR, err => {
                 assert.fail(err.message);
-            });
+            })
+            .on(ClientEvents.CLIENT_DISCONNECTED, () => {
+                bothClosed = true;
+            })
 
         willBeLeaderFirst.init();
         try {
-            await waitForPredicate(
-                () => leadersSequence.length >= 2,
-                {timeout: 30000});
+            await waitForPredicate(() => !!bothClosed, {timeout: 30000});
 
-            assert.strictEqual(leadersSequence[0], willBeLeaderFirst.id);
-            assert.strictEqual(leadersSequence[1], willBeLeaderLater.id);
+            // v0.2.2 set id = null and isLeader = false after client disconnection
+            assert.strictEqual(leadersSequence.length, 2);
+            assert.strictEqual(willBeLeaderFirst.id, null);
+            assert.strictEqual(willBeLeaderLater.id, null);
+
         } catch (error) {
             if (error.message === TIMEOUT_EXPIRED) {
                 assert.fail("Timeout expired");
@@ -196,7 +199,8 @@ describe("Zookeeper Client", async () => {
         const firstClient = new ZookeeperLeaderElection(opts);
         const secondClient = new ZookeeperLeaderElection(opts)
             .on(ClientEvents.ERROR, _error => {
-            error = _error });
+                error = _error
+            });
 
         firstClient.on(ClientEvents.NODE_CREATED, () => {
             secondClient.init();
@@ -218,12 +222,7 @@ describe("Zookeeper Client", async () => {
             });
             that.client.connect();
         }
-        mock.method(
-            secondClient,
-            "init",
-            noCheckInit.bind(null, secondClient),
-            { times: 1 }
-        );
+        mock.method(secondClient, "init", noCheckInit.bind(null, secondClient), {times: 1});
 
         firstClient.init();
 
