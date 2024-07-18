@@ -125,6 +125,8 @@ class ZookeeperLeaderElection extends EE {
                 }
                 this.disconnecting = false;
                 this.disconnected = true;
+                this.isLeader = false;
+                this.id = null;
                 /**
                  * @event ClientEvents.CLIENT_DISCONNECTED
                  * @typedef {{host: string, path: string, id: number}}
