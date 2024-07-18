@@ -20,8 +20,6 @@ describe("Zookeeper Client", async () => {
         await container.stop();
     });
 
-    after(() => { process.exit(0) });
-
     await it("Create single client node and elect the leader", async () => {
 
         const opts = {
@@ -77,6 +75,56 @@ describe("Zookeeper Client", async () => {
             }
         } finally {
             client.close();
+        }
+    });
+
+    await it("Check client status", async () => {
+
+        let connected;
+        let disconnecting;
+        let disconnected;
+        let finish = false;
+
+        const opts = {
+            host,
+            zNodeName: "/connect-election",
+            childrenPrefix: "guid-n_",
+            sessionTimeout: 10000,
+            spinDelay: 1000,
+            retries: 0
+        };
+
+        const clientConnectedCallback = () => {
+            connected = !client.disconnected;
+            disconnecting = client.disconnecting;
+        };
+        const clientDisconnectedCallback = () => {
+            disconnected = client.disconnected;
+            finish = true;
+        };
+        const childCreatedCallback = () => {
+            client.close();
+        }
+
+        const client = new ZookeeperLeaderElection(opts)
+            .on(ClientEvents.CHILD_CREATED, childCreatedCallback)
+            .on(ClientEvents.CLIENT_CONNECTED, clientConnectedCallback)
+            .on(ClientEvents.CLIENT_DISCONNECTED, clientDisconnectedCallback)
+
+        client.init();
+
+        try {
+            await waitForPredicate(() => !!finish,  {timeout: 10000});
+            assert.strictEqual(connected, true);
+            assert.strictEqual(disconnected, true);
+            assert.strictEqual(disconnecting, false);
+            assert.strictEqual(client.disconnecting, false);
+        } catch (error) {
+            if (error.message === TIMEOUT_EXPIRED) {
+                assert.fail("Timeout expired");
+            } else {
+                throw error;
+            }
         }
     });
 
@@ -234,7 +282,7 @@ describe("Zookeeper Client", async () => {
         }
     });
 
-    await it("try to remove a non-empty zNode", async () => {
+    await it("Try to remove a non-empty zNode", async () => {
 
         let errorName = null;
 
@@ -270,4 +318,5 @@ describe("Zookeeper Client", async () => {
             client.close();
         }
     });
+
 });
