@@ -106,6 +106,7 @@ class ZookeeperLeaderElection extends EE {
                     this.emit(ClientEvents.ERROR, error);
                     return;
                 }
+                this.disconnected = false;
                 /**
                  * @event ClientEvents.CLIENT_CONNECTED
                  * @typedef {{host: string}}
@@ -122,6 +123,7 @@ class ZookeeperLeaderElection extends EE {
                     this.emit(ClientEvents.ERROR, error);
                     return;
                 }
+                this.disconnecting = false;
                 this.disconnected = true;
                 /**
                  * @event ClientEvents.CLIENT_DISCONNECTED
